@@ -3,7 +3,6 @@ require('dotenv').config()
 const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
-const bcrypt = require('bcrypt');
 var _ = require('lodash');
 
 const homeStartingContent = "Lacus vel facilisis volutpat est velit egestas dui id ornare. Semper auctor neque vitae tempus quam. Sit amet cursus sit amet dictum sit amet justo. Viverra tellus in hac habitasse. Imperdiet proin fermentum leo vel orci porta. Donec ultrices tincidunt arcu non sodales neque sodales ut. Mattis molestie a iaculis at erat pellentesque adipiscing. Magnis dis parturient montes nascetur ridiculus mus mauris vitae ultricies. Adipiscing elit ut aliquam purus sit amet luctus venenatis lectus. Ultrices vitae auctor eu augue ut lectus arcu bibendum at. Odio euismod lacinia at quis risus sed vulputate odio ut. Cursus mattis molestie a iaculis at erat pellentesque adipiscing.";
@@ -18,7 +17,7 @@ app.use(bodyParser.urlencoded({extended: true}));
 app.use(express.static("public"));
 
 // variables
-const saltRounds = 10;
+
 
 // home page GET method
 
@@ -111,44 +110,7 @@ app.get('/register', function(request, response){
 app.post('/register', function(request, response){
   let userEmail = request.body.username ;
   let userPassword = request.body.password ;
-  // checking any user exixst by this email ....
-  User.findOne({user_email: userEmail }, function (err, doc){
-    if(!err){
-      console.log(doc);
-      if (doc) {
-        console.log("this user is already exist in the system");
-        response.redirect('/login')
-      }else{
 
-        bcrypt.genSalt(saltRounds, function(err, salt) {
-            bcrypt.hash(userPassword, salt, function(err, hashPassword) {
-              if (!err) {
-                let user = new User({
-                  user_email : userEmail,
-                  user_password : hashPassword
-                })
-                user.save(function(err){
-                  if(!err){
-                    console.log("user is created successfully......")
-                    response.redirect('/login')
-                  }else{
-                    console.log(err);
-                  }
-                })
-
-              }else{
-                response.redirect('/register')
-              }
-
-            });
-        });
-
-      }
-    }else{
-      console.log("database error ....");
-      response.redirect('/')
-    }
-  });
 
 })
 
@@ -160,27 +122,7 @@ app.get('/login', function(request, response){
 app.post('/login', function(request, response){
   let userEmail = request.body.username ;
   let userPassword = request.body.password ;
-  User.findOne({user_email: userEmail}, function (err, docFound){
-    if(!err){
-      console.log(docFound);
-      if (docFound) {
-        bcrypt.compare(userPassword, docFound.user_password, function(error, passwordMatched){
-          if (passwordMatched === true) {
-            response.redirect('/secrets')
-          }else{
-            response.redirect('/login')
-          }
-        });
 
-      }else{
-        console.log("email does not exist in the system");
-        response.redirect('/login')
-      }
-    }else{
-      console.log("database error ....");
-      response.redirect('/')
-    }
-  });
 })
 
 /*********************************************************/
