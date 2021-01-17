@@ -35,7 +35,7 @@ const passportLocalMongoose = require('passport-local-mongoose')
 
 
 app.use(session({
-  secret: 'keyboard cat',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false
 }))
