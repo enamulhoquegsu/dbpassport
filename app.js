@@ -15,7 +15,10 @@ app.set('view engine', 'ejs');
 
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(express.static("public"));
+const session = require('express-session');
 
+const passport = require('passport');
+const passportLocalMongoose = require('passport-local-mongoose')
 // variables
 
 
@@ -31,6 +34,16 @@ app.use(express.static("public"));
 /****************************** End of Delete route ******************************* */
 
 
+app.use(session({
+  secret: 'keyboard cat',
+  resave: false,
+  saveUninitialized: false
+}))
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+/********************************************************************************/
 
 // mongoose started
 let mongoose = require('mongoose');
@@ -41,6 +54,7 @@ mongoose.connect("mongodb+srv://"+process.env.DB_USER+":" + process.env.DB_PASSW
   useNewUrlParser: true,
   useUnifiedTopology: true
 });
+mongoose.set("useCreateIndex",true);
 // 1. blogSchema is created
 const blogSchema = new mongoose.Schema({
   title: String,
@@ -58,12 +72,18 @@ const userSchema = new mongoose.Schema({
   user_email : String,
   user_password : String
 })
+userSchema.plugin(passportLocalMongoose);
 
 // 2 --> create a model
 
 const User = mongoose.model("User", userSchema);
 
+// use static authenticate method of model in LocalStrategy
+passport.use(User.createStrategy());
 
+// use static serialize and deserialize of model for passport session support
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 
 /************************************************************************************* */
 // main Schema
@@ -108,27 +128,67 @@ app.get('/register', function(request, response){
 })
 /*****/
 app.post('/register', function(request, response){
-  let userEmail = request.body.username ;
-  let userPassword = request.body.password ;
+
+
+  User.register({username:request.body.username}, request.body.password, function(err, user) {
+    if (!err) {
+      //var authenticate = User.authenticate();
+      passport.authenticate('local')(request, response, function(){
+        response.redirect('/secrets');
+      })
+    }else{
+      console.log(err);
+      console.log("something is wrong..");
+      response.redirect('/register')
+    }
+  });
 
 
 })
 
-/**************************************************************************/
+/******************************** Get & Post login ****************************************/
 app.get('/login', function(request, response){
+
   response.render('login')
+
 })
 /*****/
 app.post('/login', function(request, response){
-  let userEmail = request.body.username ;
-  let userPassword = request.body.password ;
+  const user = new User({
+    username: request.body.username,
+    password: request.body.password
+  })
+  request.login(user, function(err){
+    if(!err){
+      passport.authenticate('local')(request, response, function(){
+        response.redirect('/secrets');
+      })
+    }else{
+      console.log(err);
+      response.redirect('/login')
+    }
+  })
 
 })
 
 /*********************************************************/
 app.get('/secrets', function(request, response){
-  response.render('secrets')
+  if(request.isAuthenticated()){
+    response.render('secrets')
+  }else{
+    response.redirect('/login')
+  }
+
 })
+
+
+/**********************************Log out page***********************/
+
+app.get('/logout', function(request, response){
+  request.logout();
+  response.redirect('/')
+})
+
 
 /***************************************************/
 
