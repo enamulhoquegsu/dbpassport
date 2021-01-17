@@ -3,7 +3,6 @@ require('dotenv').config()
 const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
-const bcrypt = require('bcrypt');
 var _ = require('lodash');
 
 const homeStartingContent = "Lacus vel facilisis volutpat est velit egestas dui id ornare. Semper auctor neque vitae tempus quam. Sit amet cursus sit amet dictum sit amet justo. Viverra tellus in hac habitasse. Imperdiet proin fermentum leo vel orci porta. Donec ultrices tincidunt arcu non sodales neque sodales ut. Mattis molestie a iaculis at erat pellentesque adipiscing. Magnis dis parturient montes nascetur ridiculus mus mauris vitae ultricies. Adipiscing elit ut aliquam purus sit amet luctus venenatis lectus. Ultrices vitae auctor eu augue ut lectus arcu bibendum at. Odio euismod lacinia at quis risus sed vulputate odio ut. Cursus mattis molestie a iaculis at erat pellentesque adipiscing.";
@@ -16,9 +15,12 @@ app.set('view engine', 'ejs');
 
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(express.static("public"));
+const session = require('express-session');
 
+const passport = require('passport');
+const passportLocalMongoose = require('passport-local-mongoose')
 // variables
-const saltRounds = 10;
+
 
 // home page GET method
 
@@ -32,6 +34,16 @@ const saltRounds = 10;
 /****************************** End of Delete route ******************************* */
 
 
+app.use(session({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false
+}))
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+/********************************************************************************/
 
 // mongoose started
 let mongoose = require('mongoose');
@@ -42,6 +54,7 @@ mongoose.connect("mongodb+srv://"+process.env.DB_USER+":" + process.env.DB_PASSW
   useNewUrlParser: true,
   useUnifiedTopology: true
 });
+mongoose.set("useCreateIndex",true);
 // 1. blogSchema is created
 const blogSchema = new mongoose.Schema({
   title: String,
@@ -59,12 +72,18 @@ const userSchema = new mongoose.Schema({
   user_email : String,
   user_password : String
 })
+userSchema.plugin(passportLocalMongoose);
 
 // 2 --> create a model
 
 const User = mongoose.model("User", userSchema);
 
+// use static authenticate method of model in LocalStrategy
+passport.use(User.createStrategy());
 
+// use static serialize and deserialize of model for passport session support
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 
 /************************************************************************************* */
 // main Schema
@@ -109,84 +128,67 @@ app.get('/register', function(request, response){
 })
 /*****/
 app.post('/register', function(request, response){
-  let userEmail = request.body.username ;
-  let userPassword = request.body.password ;
-  // checking any user exixst by this email ....
-  User.findOne({user_email: userEmail }, function (err, doc){
-    if(!err){
-      console.log(doc);
-      if (doc) {
-        console.log("this user is already exist in the system");
-        response.redirect('/login')
-      }else{
 
-        bcrypt.genSalt(saltRounds, function(err, salt) {
-            bcrypt.hash(userPassword, salt, function(err, hashPassword) {
-              if (!err) {
-                let user = new User({
-                  user_email : userEmail,
-                  user_password : hashPassword
-                })
-                user.save(function(err){
-                  if(!err){
-                    console.log("user is created successfully......")
-                    response.redirect('/login')
-                  }else{
-                    console.log(err);
-                  }
-                })
 
-              }else{
-                response.redirect('/register')
-              }
-
-            });
-        });
-
-      }
+  User.register({username:request.body.username}, request.body.password, function(err, user) {
+    if (!err) {
+      //var authenticate = User.authenticate();
+      passport.authenticate('local')(request, response, function(){
+        response.redirect('/secrets');
+      })
     }else{
-      console.log("database error ....");
-      response.redirect('/')
+      console.log(err);
+      console.log("something is wrong..");
+      response.redirect('/register')
     }
   });
 
+
 })
 
-/**************************************************************************/
+/******************************** Get & Post login ****************************************/
 app.get('/login', function(request, response){
+
   response.render('login')
+
 })
 /*****/
 app.post('/login', function(request, response){
-  let userEmail = request.body.username ;
-  let userPassword = request.body.password ;
-  User.findOne({user_email: userEmail}, function (err, docFound){
+  const user = new User({
+    username: request.body.username,
+    password: request.body.password
+  })
+  request.login(user, function(err){
     if(!err){
-      console.log(docFound);
-      if (docFound) {
-        bcrypt.compare(userPassword, docFound.user_password, function(error, passwordMatched){
-          if (passwordMatched === true) {
-            response.redirect('/secrets')
-          }else{
-            response.redirect('/login')
-          }
-        });
-
-      }else{
-        console.log("email does not exist in the system");
-        response.redirect('/login')
-      }
+      passport.authenticate('local')(request, response, function(){
+        response.redirect('/secrets');
+      })
     }else{
-      console.log("database error ....");
-      response.redirect('/')
+      console.log(err);
+      response.redirect('/login')
     }
-  });
+  })
+
 })
 
 /*********************************************************/
 app.get('/secrets', function(request, response){
-  response.render('secrets')
+  if(request.isAuthenticated()){
+    response.render('secrets')
+  }else{
+    response.redirect('/login')
+  }
+
 })
+
+
+/**********************************Log out page***********************/
+
+app.get('/logout', function(request, response){
+  request.logout();
+  response.redirect('/')
+})
+
 
 /***************************************************/
 
